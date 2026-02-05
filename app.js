@@ -101,5 +101,5 @@ app.use((err, req, res, next) => {
 /* ============================
    START SERVER
    ============================ */
-const PORT = 3002;
+const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => console.log(`Server on port ${PORT}`));
