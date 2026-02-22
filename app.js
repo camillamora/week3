@@ -1,7 +1,22 @@
 const express = require('express');
+const cors = require('cors');
+const logRequest = require("./logger.js");
+const validateTodo = require("./validator.js");
+const errorHandler = require("./errorHandler.js");
+const validatePartialTodo = require("./validatorPatch.js");
+
 const app = express();
 
+
 app.use(express.json()); // Parse JSON bodies
+
+const corsOptions = {
+  origin : 'http://localhost:5173',
+};
+
+app.use(cors(corsOptions));
+
+app.use(logRequest);
 
 // In‑memory todos
 let todos = [
@@ -19,84 +34,102 @@ app.get('/todos', (req, res) => {
 /* ============================
    GET ONE – Read by ID
    ============================ */
-app.get('/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const todo = todos.find(t => t.id === id);
-
-  if (!todo) {
-    return res.status(404).json({ error: 'Todo not found' });
+app.get('/todos/:id', (req, res, next) => {
+  try{
+    const id = parseInt(req.params.id);
+  if(isNaN(id)){
+    throw new Error("Invalid ID")
   }
 
-  res.json(todo);
+    const todo = todos.find(t => t.id === id);
+
+    if (!todo) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+
+    res.json(todo);
+  } catch(error){
+    next(error);
+  }
 });
 
 /* ============================
    POST – Create
    (Validation: "task" required)
    ============================ */
-app.post('/todos', (req, res) => {
-  const { task, completed } = req.body;
+app.post('/todos', validateTodo, (req, res, next) => {
+  try{
+    const { task, completed } = req.body;
 
-  if (!task) {
-    return res.status(400).json({ error: 'Task is required' });
+    const newTodo = {
+      id: todos.length + 1,
+      task,
+      completed: completed || false,
+    };
+
+    todos.push(newTodo);
+    res.status(201).json(newTodo);
+  } catch (error) {
+    next(error);
   }
-
-  const newTodo = {
-    id: todos.length + 1,
-    task,
-    completed: completed || false,
-  };
-
-  todos.push(newTodo);
-  res.status(201).json(newTodo);
 });
 
 /* ============================
    PATCH – Update (partial)
    ============================ */
-app.patch('/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const todo = todos.find(t => t.id === id);
+app.patch('/todos/:id', validatePartialTodo, (req, res, next) => {
+  try{
+    const id = parseInt(req.params.id);
+    const todo = todos.find(t => t.id === id);
 
-  if (!todo) {
-    return res.status(404).json({ error: 'Todo not found' });
+    if (!todo) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+
+    Object.assign(todo, req.body); // Merge updates
+    res.status(200).json(todo);
+  } catch(error){
+    next(error);
   }
-
-  Object.assign(todo, req.body); // Merge updates
-  res.status(200).json(todo);
 });
 
 /* ============================
    DELETE – Remove
    ============================ */
-app.delete('/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const initialLength = todos.length;
+app.delete('/todos/:id', (req, res, next) => {
+  try{
+    const id = parseInt(req.params.id);
+    const initialLength = todos.length;
 
-  todos = todos.filter(t => t.id !== id);
+    todos = todos.filter(t => t.id !== id);
 
-  if (todos.length === initialLength) {
-    return res.status(404).json({ error: 'Todo not found' });
+    if (todos.length === initialLength) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+
+    res.status(204).send(); // No content
+  } catch(error){
+    next(error);
   }
-
-  res.status(204).send(); // No content
 });
 
 /* ============================
    BONUS – GET active todos
    (completed === false)
    ============================ */
-app.get('/todos/active', (req, res) => {
-  const active = todos.filter(t => !t.completed);
-  res.json(active);
+app.get('/todos/active', (req, res, next) => {
+  try{
+    const active = todos.filter(t => !t.completed);
+    res.json(active);
+  } catch(error){
+    next(error);
+  }
 });
 
 /* ============================
    ERROR HANDLER
    ============================ */
-app.use((err, req, res, next) => {
-  res.status(500).json({ error: 'Server error!' });
-});
+app.use(errorHandler);
 
 /* ============================
    START SERVER
